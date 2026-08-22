@@ -19,7 +19,10 @@ help: ## Lista os alvos disponíveis
 	  | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
 setup: ## Cria .env, os diretórios de volume e config/kady.env
-	@if [ ! -f .env ]; then cp .env.example .env; echo "criado: .env"; \
+	@if [ ! -f .env ]; then \
+	  cp .env.example .env; \
+	  sed -i "s/^PUID=.*/PUID=$$(id -u)/; s/^PGID=.*/PGID=$$(id -g)/" .env; \
+	  echo "criado: .env  (PUID=$$(id -u) PGID=$$(id -g) detectados)"; \
 	 else echo "já existe: .env"; fi
 	@mkdir -p config data/projects data/kady
 	@if [ ! -f config/kady.env ]; then \
@@ -35,7 +38,7 @@ setup: ## Cria .env, os diretórios de volume e config/kady.env
 	@echo "Próximos passos:"
 	@echo "  1. edite config/kady.env  (ex.: OPENROUTER_API_KEY=...)"
 	@echo "     — ou deixe em branco e configure depois em Settings → API keys"
-	@echo "  2. confira .env           (PUID/PGID: use 'id -u' e 'id -g')"
+	@echo "  2. acesso remoto? veja 'Rodando num servidor' no README"
 	@echo "  3. make up"
 
 build: ## Builda as duas imagens

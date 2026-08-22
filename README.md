@@ -109,6 +109,62 @@ OPENAI_COMPATIBLE_BASE_URL=http://host.docker.internal:1234
 
 > Regra geral: o que o compose declara em `environment:` (portas, paths de dados, `KADY_HOST`, `OLLAMA_BASE_URL`) sobrepõe o `config/kady.env`. Todo o resto — chaves de API, modelo default, limites de gasto — vem do `config/kady.env`.
 
+## Rodando num servidor
+
+Num servidor acessado de outra máquina, `make setup && make up` sobe os
+serviços, mas o navegador **não** vai conseguir usar a UI sem um dos dois
+ajustes abaixo. O motivo é que o endereço da API é embutido no bundle do Next
+durante o build: por padrão `http://localhost:8000`, que no seu navegador
+resolve para a *sua* máquina, não para o servidor.
+
+### Opção A — túnel SSH (recomendado, e sem rebuild)
+
+Mantém o default `BIND_ADDR=127.0.0.1`: o Kady fica inacessível pela rede e o
+tráfego trafega cifrado. Como o túnel usa as mesmas portas locais, o
+`localhost:8000` embutido no bundle continua correto.
+
+```bash
+# no servidor
+make setup && make up
+
+# na sua máquina
+ssh -L 3000:localhost:3000 -L 8000:localhost:8000 usuario@servidor
+```
+
+Abra `http://localhost:3000`.
+
+### Opção B — expor na rede (exige rebuild e proteção externa)
+
+```bash
+# .env no servidor
+BIND_ADDR=0.0.0.0
+KADY_PUBLIC_API_URL=http://IP-DO-SERVIDOR:8000
+```
+
+```bash
+make build-web && make up    # o rebuild é obrigatório: a URL vai no bundle
+```
+
+> **O Kady não tem autenticação.** Nesta opção, qualquer um que alcance as
+> portas 3000/8000 usa suas chaves de API e executa shell e Python arbitrários
+> dentro do container. Só faça isso atrás de um firewall fechado, VPN, ou de um
+> proxy reverso que exija autenticação — nunca direto na internet.
+
+### Requisitos de máquina para o build
+
+- **~12 GB de disco** para as imagens, mais o cache do BuildKit.
+- **≥ 4 GB de RAM**: o `next build` é a etapa mais pesada e pode ser morto por
+  OOM em VPS pequenas. Se acontecer, builde num servidor maior e envie a
+  imagem com `docker save`/`docker load`, ou desligue os extras (ver
+  [Imagem menor](#imagem-menor)).
+- O build leva ~20 min e precisa de rede (GitHub, npm, apt, PyPI).
+
+### O que não viaja no repositório
+
+Chaves de API e credenciais ficam de fora do git por design. Num servidor novo
+você recomeça com `config/kady.env` limpo e informa as chaves ali, ou pela UI
+em **Settings → API keys**.
+
 ## Imagem menor
 
 Os extras respondem por quase todo o tamanho do `kady-server` (7,7 GB medidos). Para reduzir bastante, no `.env`:
