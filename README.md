@@ -133,22 +133,48 @@ ssh -L 3000:localhost:3000 -L 8000:localhost:8000 usuario@servidor
 
 Abra `http://localhost:3000`.
 
-### Opção B — expor na rede (exige rebuild e proteção externa)
+### Opção B — expor na rede local
+
+Funciona **apenas se o servidor estiver numa faixa de IP privada**
+(`192.168.x.x`, `10.x.x.x`, `172.16-31.x.x`). Veja a limitação de CORS abaixo.
+
+As duas variáveis vão no **`.env` da raiz** (o arquivo do docker compose), não
+em `config/kady.env`:
 
 ```bash
-# .env no servidor
+# .env
 BIND_ADDR=0.0.0.0
-KADY_PUBLIC_API_URL=http://IP-DO-SERVIDOR:8000
+KADY_PUBLIC_API_URL=http://192.168.68.125:8000   # IP do servidor, porta 8000
 ```
 
 ```bash
-make build-web && make up    # o rebuild é obrigatório: a URL vai no bundle
+make build-web    # OBRIGATÓRIO: a URL é embutida no bundle do Next
+make up
 ```
 
-> **O Kady não tem autenticação.** Nesta opção, qualquer um que alcance as
-> portas 3000/8000 usa suas chaves de API e executa shell e Python arbitrários
-> dentro do container. Só faça isso atrás de um firewall fechado, VPN, ou de um
-> proxy reverso que exija autenticação — nunca direto na internet.
+Acesse `http://192.168.68.125:3000`.
+
+> **O Kady não tem autenticação.** Qualquer um que alcance as portas 3000/8000
+> usa suas chaves de API e executa shell e Python arbitrários dentro do
+> container. Só faça isso numa rede em que você confia.
+
+#### Limitação: o CORS do upstream bloqueia IP público e domínio
+
+`server/src/cors.ts` só libera `localhost`, `127.0.0.1`, `[::1]` e as faixas
+privadas RFC1918. Comportamento medido contra o backend em execução:
+
+| Origem do navegador | Resultado |
+|---|---|
+| `http://192.168.68.125:3000` | permitido |
+| `http://10.0.0.5:3000` | permitido |
+| `http://172.20.0.4:3000` | permitido |
+| `http://203.0.113.5:3000` (IP público) | **bloqueado** |
+| `http://kady.exemplo.com:3000` (domínio) | **bloqueado** |
+
+Ou seja: **IP público ou nome de domínio não funcionam** nesta opção — a
+página abre e toda chamada de API falha no navegador. Nesses casos use o
+túnel SSH (Opção A), ou um proxy reverso que sirva UI e API **na mesma
+origem** (aí não há CORS, e `KADY_PUBLIC_API_URL` aponta para essa origem).
 
 ### Requisitos de máquina para o build
 
