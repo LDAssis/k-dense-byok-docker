@@ -21,8 +21,11 @@ help: ## Lista os alvos disponíveis
 setup: ## Cria .env, os diretórios de volume e config/kady.env
 	@if [ ! -f .env ]; then \
 	  cp .env.example .env; \
-	  sed -i "s/^PUID=.*/PUID=$$(id -u)/; s/^PGID=.*/PGID=$$(id -g)/" .env; \
-	  echo "criado: .env  (PUID=$$(id -u) PGID=$$(id -g) detectados)"; \
+	  uid=$${SUDO_UID:-$$(id -u)}; gid=$${SUDO_GID:-$$(id -g)}; \
+	  if [ "$$uid" = "0" ]; then uid=1000; gid=1000; \
+	    echo "aviso: rodando como root — usando PUID/PGID 1000 (o container não pode rodar como root)"; fi; \
+	  sed -i "s/^PUID=.*/PUID=$$uid/; s/^PGID=.*/PGID=$$gid/" .env; \
+	  echo "criado: .env  (PUID=$$uid PGID=$$gid)"; \
 	 else echo "já existe: .env"; fi
 	@mkdir -p config data/projects data/kady
 	@if [ ! -f config/kady.env ]; then \

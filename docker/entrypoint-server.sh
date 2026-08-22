@@ -23,6 +23,13 @@ current_gid="$(id -g kady)"
 want_uid="${PUID:-$current_uid}"
 want_gid="${PGID:-$current_gid}"
 
+# usermod não consegue renumerar root; PUID=0 quebraria o container em runtime
+# da mesma forma que quebra o build.
+if [ "$want_uid" = "0" ] || [ "$want_gid" = "0" ]; then
+  log "ERRO: PUID/PGID não podem ser 0 (root). Ajuste no .env (ex.: 1000)."
+  exit 1
+fi
+
 if [ "$want_gid" != "$current_gid" ]; then
   log "ajustando GID de kady: $current_gid -> $want_gid"
   groupmod -o -g "$want_gid" kady

@@ -242,6 +242,15 @@ make up COMPOSE="sudo docker compose"
 
 **A UI abre mas não carrega os projetos.** O browser não está alcançando a API. Confirme `curl http://localhost:8000/health` e que `KADY_PUBLIC_API_URL` bate com o endereço pelo qual você acessa a UI (após mudar: `make build-web`).
 
+**Build falha com `usermod: user root is currently used by process 1` (exit 8).**
+`PUID`/`PGID` estão em `0` no `.env`, o que acontece ao rodar `make setup` com
+sudo ou como root. O container não pode rodar como root. Corrija no `.env`:
+
+```bash
+sed -i "s/^PUID=.*/PUID=1000/; s/^PGID=.*/PGID=1000/" .env   # ou o id do seu usuário
+make up
+```
+
 **Arquivos em `data/` como root.** `PUID`/`PGID` diferentes dos seus. Ajuste no `.env` e `make restart` — o entrypoint realinha o usuário.
 
 **O primeiro boot demora muito.** É o `prep`: cria o projeto default, baixa o catálogo de skills e sincroniza o venv do sandbox. `make logs-server` mostra o progresso. Para pular: `KADY_SKIP_PREP=1`.

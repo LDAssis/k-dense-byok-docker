@@ -35,6 +35,15 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 # criamos) para `kady` no UID/GID pedido, de modo que os arquivos escritos
 # nos bind mounts pertençam ao usuário do host, e não a root.
 RUN set -eux; \
+    if [ "${PUID}" = "0" ] || [ "${PGID}" = "0" ]; then \
+      echo "ERRO: PUID/PGID não podem ser 0 (root)." >&2; \
+      echo "  O container roda o agente como usuário sem privilégio; renomear o" >&2; \
+      echo "  usuário root é impossível (usermod falha com 'currently used by" >&2; \
+      echo "  process 1')." >&2; \
+      echo "  Ajuste PUID/PGID no .env para um usuário comum, ex.: PUID=1000 PGID=1000." >&2; \
+      echo "  Isso costuma acontecer ao rodar 'make setup' com sudo/como root." >&2; \
+      exit 1; \
+    fi; \
     if getent group "${PGID}" >/dev/null; then \
       groupmod -n kady "$(getent group "${PGID}" | cut -d: -f1)"; \
     else \
