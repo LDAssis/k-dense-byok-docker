@@ -81,10 +81,12 @@ RUN set -eux; \
 FROM base AS web
 
 WORKDIR /app
-COPY --from=source /src/web /app/web
+# --chown no COPY já grava o dono certo: evita um `chown -R` posterior, que
+# faria copy-up de todo o node_modules para um layer novo (medido em ~15 min).
+COPY --from=source --chown=kady:kady /src/web /app/web
 # web/next.config.ts lê a versão do app em ../server/package.json durante o
 # build; sem esse arquivo o banner de "update available" fica sempre ligado.
-COPY --from=source /src/server/package.json /app/server/package.json
+COPY --from=source --chown=kady:kady /src/server/package.json /app/server/package.json
 
 # O app é 100% client-side: quem chama a API é o BROWSER DO HOST, então esta
 # URL precisa ser alcançável de fora do container. É inlined pelo Next no
@@ -93,7 +95,10 @@ ARG NEXT_PUBLIC_ADK_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_ADK_API_URL=${NEXT_PUBLIC_ADK_API_URL} \
     NEXT_TELEMETRY_DISABLED=1
 
+ENV HOME=/home/kady
 WORKDIR /app/web
+# Instala e builda como `kady`: tudo que nasce daqui já tem o dono correto.
+USER kady
 # NODE_ENV fica em "development" aqui de propósito: tailwind/typescript/eslint
 # são devDependencies e são necessários para o `next build`.
 RUN npm ci --no-audit --no-fund --loglevel=error \
@@ -101,9 +106,13 @@ RUN npm ci --no-audit --no-fund --loglevel=error \
 # next/font/google em web/src/app/layout.tsx baixa e auto-hospeda as fontes:
 # este passo precisa de rede.
 RUN npx --no-install next build
+# eslint/typescript/vitest/tailwind/shadcn só servem para buildar; `next start`
+# precisa apenas das dependencies. Corta vários GB da imagem.
+RUN npm prune --omit=dev --no-audit --no-fund --loglevel=error
 
+USER root
 COPY entrypoint-web.sh /usr/local/bin/entrypoint-web.sh
-RUN chmod +x /usr/local/bin/entrypoint-web.sh && chown -R kady:kady /app
+RUN chmod +x /usr/local/bin/entrypoint-web.sh
 
 USER kady
 ENV NODE_ENV=production \
@@ -146,9 +155,17 @@ ENV UV_CACHE_DIR=/opt/uv/cache \
     UV_LINK_MODE=copy
 
 WORKDIR /app
-COPY --from=source /src /app
+COPY --from=source --chown=kady:kady /src /app
 
+# Diretórios vazios: este chown é instantâneo, ao contrário de um `chown -R`
+# sobre a árvore instalada. /opt/uv precisa existir mesmo quando os extras
+# estão desligados, senão o uv não tem onde escrever.
+RUN mkdir -p /opt/uv/cache /opt/uv/python /app/config /app/projects \
+ && chown -R kady:kady /opt/uv /app/config /app/projects
+
+ENV HOME=/home/kady
 WORKDIR /app/server
+USER kady
 RUN npm ci --no-audit --no-fund --loglevel=error \
  || npm install --no-audit --no-fund --loglevel=error
 
@@ -169,10 +186,11 @@ RUN set -eux; \
       cd / && rm -rf /tmp/warm; \
     fi
 
+# Volta para root: o entrypoint precisa dele para alinhar UID e ajustar os
+# bind mounts antes de dropar para `kady` via gosu.
+USER root
 COPY entrypoint-server.sh /usr/local/bin/entrypoint-server.sh
-RUN chmod +x /usr/local/bin/entrypoint-server.sh \
- && mkdir -p /app/config /app/projects \
- && chown -R kady:kady /app /opt/uv /home/kady
+RUN chmod +x /usr/local/bin/entrypoint-server.sh
 
 ENV NODE_ENV=production \
     KADY_HOST=0.0.0.0 \
