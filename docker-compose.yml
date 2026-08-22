@@ -1,0 +1,103 @@
+name: kady
+
+x-build-args: &build-args
+  KADY_REPO: ${KADY_REPO:-https://github.com/K-Dense-AI/k-dense-byok.git}
+  KADY_REF: ${KADY_REF:-v0.9.9}
+  KADY_CACHEBUST: ${KADY_CACHEBUST:-0}
+  PUID: ${PUID:-1000}
+  PGID: ${PGID:-1000}
+
+services:
+  # ---------------------------------------------------------------------
+  # Backend: Fastify + agente Pi. Dono do sandbox, dos arquivos, das
+  # sessões e do ledger de custo.
+  # ---------------------------------------------------------------------
+  kady-server:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile
+      target: server
+      args:
+        <<: *build-args
+        INSTALL_TEXLIVE: ${INSTALL_TEXLIVE:-1}
+        INSTALL_SCI_HELPERS: ${INSTALL_SCI_HELPERS:-1}
+        WARM_UV_CACHE: ${WARM_UV_CACHE:-1}
+    image: kady-server:${KADY_REF:-v0.9.9}
+    container_name: kady-server
+    # A porta 8000 é publicada porque o BROWSER fala direto com ela (SSE do
+    # chat, uploads) — não é um backend interno.
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${KADY_API_PORT:-8000}:8000"
+    env_file:
+      # Chaves de API e preferências. Gerado por `make setup` (e também pelo
+      # entrypoint, no primeiro boot) a partir do .env.example do upstream.
+      - path: ./config/kady.env
+        required: false
+    environment:
+      # Sem isto o Fastify escuta só em 127.0.0.1 DENTRO do container
+      # (server/src/config.ts) e a porta publicada não responde.
+      KADY_HOST: 0.0.0.0
+      KADY_PORT: 8000
+      # Persistência: tudo abaixo cai nos bind mounts.
+      KADY_PROJECTS_ROOT: /app/projects
+      KADY_PI_AGENT_DIR: /home/kady/.kady/pi-agent
+      KADY_SKILLS_CACHE_DIR: /home/kady/.kady/skills-cache
+      UV_CACHE_DIR: /opt/uv/cache
+      UV_PYTHON_INSTALL_DIR: /opt/uv/python
+      # Ollama / LM Studio rodando no HOST (dentro do container, "localhost"
+      # seria o próprio container).
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      KADY_SKIP_PREP: ${KADY_SKIP_PREP:-0}
+      KADY_AUTO_UPDATE: ${KADY_AUTO_UPDATE:-0}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ./config:/app/config
+      - ./data/projects:/app/projects
+      - ./data/kady:/home/kady/.kady
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      # O primeiro boot roda o prep (download do catálogo de skills).
+      start_period: 300s
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------
+  # Frontend: Next.js estático/cliente. Não conversa com o backend pelo
+  # lado servidor — quem chama a API é o browser.
+  # ---------------------------------------------------------------------
+  kady-web:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile
+      target: web
+      args:
+        <<: *build-args
+        # Inlined no bundle pelo Next. Trocar => `make build-web`.
+        NEXT_PUBLIC_ADK_API_URL: ${KADY_PUBLIC_API_URL:-http://localhost:8000}
+    image: kady-web:${KADY_REF:-v0.9.9}
+    container_name: kady-web
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${KADY_UI_PORT:-3000}:3000"
+    environment:
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    # service_started (e não service_healthy): a UI pode abrir enquanto o
+    # backend ainda faz o prep do primeiro boot.
+    depends_on:
+      kady-server:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 15s
+    restart: unless-stopped
