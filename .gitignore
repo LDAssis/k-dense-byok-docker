@@ -7,11 +7,15 @@
 
 # Configuração da aplicação: contém OPENROUTER_API_KEY, NVIDIA_API_KEY,
 # MODAL_TOKEN_*, EXA/PERPLEXITY/GEMINI keys, etc.
-config/
+# O diretório é versionado (só o README), o conteúdo não.
+config/*
+!config/README.md
 
 # Dados do usuário: projetos, sandboxes, sessões, ledger de custo e,
 # principalmente, os tokens OAuth em data/kady/pi-agent/auth.json
-data/
+# O diretório é versionado (só o README), o conteúdo não.
+data/*
+!data/README.md
 
 # Qualquer .env solto, em qualquer nível
 *.env
