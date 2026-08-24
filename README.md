@@ -160,7 +160,7 @@ em `config/kady.env`:
 ```bash
 # .env
 BIND_ADDR=0.0.0.0
-KADY_PUBLIC_API_URL=http://192.168.68.125:8000   # IP do servidor, porta 8000
+KADY_PUBLIC_API_URL=http://192.168.0.10:8000   # IP do servidor, porta 8000
 ```
 
 ```bash
@@ -168,7 +168,7 @@ make build-web    # OBRIGATÓRIO: a URL é embutida no bundle do Next
 make up
 ```
 
-Acesse `http://192.168.68.125:3000`.
+Acesse `http://192.168.0.10:3000`.
 
 > **O Kady não tem autenticação.** Qualquer um que alcance as portas 3000/8000
 > usa suas chaves de API e executa shell e Python arbitrários dentro do
@@ -181,7 +181,7 @@ privadas RFC1918. Comportamento medido contra o backend em execução:
 
 | Origem do navegador | Resultado |
 |---|---|
-| `http://192.168.68.125:3000` | permitido |
+| `http://192.168.0.10:3000` | permitido |
 | `http://10.0.0.5:3000` | permitido |
 | `http://172.20.0.4:3000` | permitido |
 | `http://203.0.113.5:3000` (IP público) | **bloqueado** |
