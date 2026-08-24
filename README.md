@@ -71,7 +71,6 @@ Variáveis do compose (ver `.env.example`):
 | `BIND_ADDR` | `127.0.0.1` | Onde as portas são publicadas |
 | `KADY_UI_PORT` / `KADY_API_PORT` | `3000` / `8000` | Portas no host |
 | `KADY_PUBLIC_API_URL` | `http://localhost:8000` | URL da API vista pelo browser (**build-time**) |
-| `OLLAMA_BASE_URL` | `http://host.docker.internal:11434` | Ollama no host |
 | `INSTALL_TEXLIVE` | `1` | TeX Live (~2 GB) |
 | `INSTALL_SCI_HELPERS` | `1` | rdkit/gemmi/anndata/... (~2 GB) |
 | `WARM_UV_CACHE` | `1` | numpy/pandas/matplotlib/scipy pré-baixados (~0,5 GB) |
@@ -91,23 +90,40 @@ Em compensação, o agente executa código dentro do container, e não direto no
 
 ## Modelos locais (Ollama / LM Studio / vLLM)
 
-Dentro do container, `localhost` é o próprio container. Use `host.docker.internal`, que já está mapeado para o host via `extra_hosts`.
+Toda configuração de modelo local vive em **`config/kady.env`**, junto com o
+resto da configuração da aplicação. O `.env` da raiz cuida apenas de build e
+publicação.
 
-**Ollama** — configure no `.env` da raiz, **não** em `config/kady.env`: o compose define `OLLAMA_BASE_URL` explicitamente (para não herdar o `localhost` do exemplo do upstream) e essa definição vence sobre o arquivo da aplicação.
+Dentro do container, `localhost` é o próprio container — use
+`host.docker.internal`, que já está mapeado para o host via `extra_hosts`:
 
-```
-# .env (raiz)
-OLLAMA_BASE_URL=http://host.docker.internal:11434
-```
-
-**Servidores OpenAI-compatíveis** (LM Studio, vLLM, llama.cpp) — o compose não mexe nessa variável, então ela vai em `config/kady.env`:
-
-```
+```bash
 # config/kady.env
+OLLAMA_BASE_URL=http://host.docker.internal:11434
 OPENAI_COMPATIBLE_BASE_URL=http://host.docker.internal:1234
 ```
 
-> Regra geral: o que o compose declara em `environment:` (portas, paths de dados, `KADY_HOST`, `OLLAMA_BASE_URL`) sobrepõe o `config/kady.env`. Todo o resto — chaves de API, modelo default, limites de gasto — vem do `config/kady.env`.
+`make restart` e pronto. Os modelos aparecem no seletor de cada aba como
+`ollama/<nome>` e `openai-compatible/<id>`. Para tornar um deles o padrão:
+
+```bash
+# config/kady.env
+DEFAULT_MODEL_PROVIDER=ollama
+DEFAULT_MODEL_ID=qwen3:8b
+```
+
+Ao **gerar** o `config/kady.env`, o entrypoint troca o `localhost` que vem no
+exemplo do upstream por `host.docker.internal` — aquele valor nunca
+funcionaria dentro de um container. Um arquivo que já existe pertence a você e
+só recebe um aviso no log, sem ser editado.
+
+Dois cuidados:
+
+- **vLLM** usa a porta **8000** por padrão, a mesma do backend do Kady. Mude um
+  dos dois.
+- Modelos locais são contabilizados como **custo zero** e não consomem o limite
+  de gasto do projeto. Por isso, não aponte `OPENAI_COMPATIBLE_BASE_URL` para um
+  gateway pago: o gasto ficaria sem rastreio e sem teto.
 
 ## Rodando num servidor
 

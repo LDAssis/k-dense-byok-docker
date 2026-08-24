@@ -27,7 +27,7 @@ services:
     # A porta 8000 é publicada porque o BROWSER fala direto com ela (SSE do
     # chat, uploads) — não é um backend interno.
     ports:
-      - "${BIND_ADDR:-0.0.0.0}:${KADY_API_PORT:-8000}:8000"
+      - "${BIND_ADDR:-127.0.0.1}:${KADY_API_PORT:-8000}:8000"
     env_file:
       # Chaves de API e preferências. Gerado por `make setup` (e também pelo
       # entrypoint, no primeiro boot) a partir do .env.example do upstream.
@@ -44,9 +44,6 @@ services:
       KADY_SKILLS_CACHE_DIR: /home/kady/.kady/skills-cache
       UV_CACHE_DIR: /opt/uv/cache
       UV_PYTHON_INSTALL_DIR: /opt/uv/python
-      # Ollama / LM Studio rodando no HOST (dentro do container, "localhost"
-      # seria o próprio container).
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
       KADY_SKIP_PREP: ${KADY_SKIP_PREP:-0}
@@ -84,7 +81,7 @@ services:
     image: kady-web:${KADY_REF:-v0.9.9}
     container_name: kady-web
     ports:
-      - "${BIND_ADDR:-0.0.0.0}:${KADY_UI_PORT:-3000}:3000"
+      - "${BIND_ADDR:-127.0.0.1}:${KADY_UI_PORT:-3000}:3000"
     environment:
       PORT: 3000
       HOSTNAME: 0.0.0.0

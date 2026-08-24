@@ -51,14 +51,33 @@ mkdir -p \
 # O volume ./config é montado como DIRETÓRIO (nunca como arquivo): um bind
 # mount de arquivo inexistente é criado pelo Docker como diretório e quebraria
 # tudo. O kady.env nasce aqui, a partir do .env.example do upstream.
+# Dentro de um container, `localhost` é o próprio container: o
+# OLLAMA_BASE_URL/OPENAI_COMPATIBLE_BASE_URL que o upstream traz apontando para
+# localhost nunca funcionaria. Corrigimos ao GERAR o arquivo; um arquivo que já
+# existe pertence ao usuário e só recebe aviso.
+# Casa a variável comentada ou não (o upstream traz OPENAI_COMPATIBLE_BASE_URL
+# comentada) — usado ao GERAR o arquivo.
+LOCALHOST_ANY='^([[:space:]]*#?[[:space:]]*)(OLLAMA_BASE_URL|OPENAI_COMPATIBLE_BASE_URL)=(https?://)(localhost|127\.0\.0\.1)([:/]|$)'
+# Só linhas ativas — usado para avisar sobre um arquivo que já existe.
+LOCALHOST_ACTIVE='^[[:space:]]*(OLLAMA_BASE_URL|OPENAI_COMPATIBLE_BASE_URL)=https?://(localhost|127\.0\.0\.1)([:/]|$)'
+
 if [ ! -f "$CONFIG_FILE" ]; then
   if [ -f "$APP_DIR/.env.example" ]; then
     log "config/kady.env não existe — gerando a partir de .env.example"
     cp "$APP_DIR/.env.example" "$CONFIG_FILE"
+    if grep -qE "$LOCALHOST_ANY" "$CONFIG_FILE"; then
+      # Delimitador @: o regex contém '|' e '/', que quebrariam s|…| e s/…/.
+      sed -i -E "s@${LOCALHOST_ANY}@\1\2=\3host.docker.internal\5@" "$CONFIG_FILE"
+      log "  ajustado localhost -> host.docker.internal (o host, visto de dentro do container)"
+    fi
   else
     log "config/kady.env não existe e não há .env.example — criando vazio"
     : > "$CONFIG_FILE"
   fi
+elif grep -qE "$LOCALHOST_ACTIVE" "$CONFIG_FILE"; then
+  log "AVISO: config/kady.env aponta um servidor de modelos para localhost."
+  log "       Dentro do container isso é o próprio container e não vai conectar."
+  log "       Troque por host.docker.internal (host) ou pelo nome do serviço no compose."
 fi
 
 # O backend lê <REPO_ROOT>/.env e a UI (Settings → API keys) REESCREVE esse
