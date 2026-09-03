@@ -53,6 +53,7 @@ services:
       - ./config:/app/config
       - ./data/projects:/app/projects
       - ./data/kady:/home/kady/.kady
+      - ./config/models.ts:/app/server/src/agent/models.ts:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
